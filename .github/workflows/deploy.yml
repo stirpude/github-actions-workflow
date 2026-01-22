@@ -17,7 +17,7 @@ jobs:
         id: find_templates
         run: |
           # Get list of new or modified files in blueprint/
-          files=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }} | grep '^blueprint/' || true)
+          files=$(ls blueprint)
           echo "files=$files" >> $GITHUB_OUTPUT
 
       - name: Deploy each  blueprint template
