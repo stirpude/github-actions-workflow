@@ -1,0 +1,34 @@
+name: Deploy a blueprint
+
+on:
+  push:
+    paths:
+      - 'blueprint/**' 
+
+jobs:
+  deploy-blueprint:
+    runs-on: ubuntu-latest
+    if: github.event.commits[0].added || github.event.commits[0].modified
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Find new or modified template files
+        id: find_templates
+        run: |
+          # Get list of new or modified files in blueprint/
+          files=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }} | grep '^blueprint/' || true)
+          echo "files=$files" >> $GITHUB_OUTPUT
+
+      - name: Deploy each  blueprint template
+        if: steps.find_templates.outputs.files != ''
+        run: |
+          for file in ${{ steps.find_templates.outputs.files }}; do
+            echo "Processing $file"
+            # Example: Read the template and deploy (replace with your deployment logic)
+            cat "$file"
+            # Here you can add your SageMaker deployment command, e.g.:
+            # aws sagemaker create-model --cli-input-json file://$file
+          done
+
+
