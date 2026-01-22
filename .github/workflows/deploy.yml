@@ -8,7 +8,6 @@ on:
 jobs:
   deploy-blueprint:
     runs-on: ubuntu-latest
-    if: github.event.commits[0].added || github.event.commits[0].modified
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
