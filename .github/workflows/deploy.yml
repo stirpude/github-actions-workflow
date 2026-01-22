@@ -30,4 +30,12 @@ jobs:
             # aws sagemaker create-model --cli-input-json file://$file
           done
 
+      - name: Get value from JSON
+        id: get_json_value
+        run: |
+          value=$(jq -r '.test' blueprint/test.json)
+          echo "value=$value" >> $GITHUB_OUTPUT
+
+      - name: Use the value
+        run: echo 'Fetched value: ${{ steps.get_json_value.outputs.value }}'
 
