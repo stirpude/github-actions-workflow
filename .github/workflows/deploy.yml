@@ -1,9 +1,15 @@
 name: Deploy a blueprint
 
+#on:
+#  push:
+#    paths:
+#      - 'blueprint/**' 
+
 on:
   push:
-    paths:
-      - 'blueprint/**' 
+    branches:
+      - '**' 
+       
 
 jobs:
   deploy-blueprint:
@@ -16,8 +22,9 @@ jobs:
         id: find_templates
         run: |
           # Get list of new or modified files in blueprint/
-          files=$(ls blueprint)
-          echo "files=$files" >> $GITHUB_OUTPUT
+          echo "Branch: $GITHUB_REF_NAME"
+          #files=$(ls blueprint)
+          #echo "files=$files" >> $GITHUB_OUTPUT
 
       - name: Deploy each  blueprint template
         if: steps.find_templates.outputs.files != ''
