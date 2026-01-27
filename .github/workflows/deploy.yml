@@ -31,7 +31,18 @@ jobs:
         run: |
           #echo "Diffing:"
           echo "  Before: ${{ github.event.before }}"
-          echo "  After:  ${{ github.sha }}"    
+          echo "  After:  ${{ github.sha }}"  
+          CHANGED_FILES=$(git diff --name-only --diff-filter=AM \
+            ${{ github.event.before }} \
+            ${{ github.sha }})
+
+          echo "Changed files:"
+          echo "$CHANGED_FILES"
+
+          CHANGED_JSON=$(echo "$CHANGED_FILES" | grep '\.json$' || true)
+
+          echo "Changed JSON files:"
+          echo "$CHANGED_JSON"  
 
       #- name: Deploy each  blueprint template
       #  if: steps.find_templates.outputs.files != ''
