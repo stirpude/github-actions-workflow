@@ -27,7 +27,7 @@ jobs:
           #echo "files=$files" >> $GITHUB_OUTPUT
 
       - name: Check changed files
-        id: find_templates
+        id: check_changed_files
         run: |
           #echo "Diffing:"
           echo "  Before: ${{ github.event.before }}"
