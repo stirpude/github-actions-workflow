@@ -8,7 +8,7 @@ name: Deploy a blueprint
 on:
   push:
     branches:
-      - '**' 
+      - 'feature-unique' 
        
 
 jobs:
