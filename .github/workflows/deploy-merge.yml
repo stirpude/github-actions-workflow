@@ -81,3 +81,4 @@ jobs:
           # my-cli deploy --config "${{ matrix.file }}"
           
           echo "CLI executed for: ${{ matrix.file }}"
+          echo "the aws account: ${{ vars.AWS_ACCOUNT_ID }}"
