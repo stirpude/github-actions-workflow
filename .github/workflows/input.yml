@@ -1,0 +1,30 @@
+name: Input Workflowss
+
+on:
+  workflow_dispatch:
+    inputs:
+      filename:
+        description: 'Enter filename'
+        required: true
+        type: string
+      region:
+        description: 'Enter AWS region'
+        required: false
+        default: 'us-east-1'
+        type: string
+
+jobs:
+  deploy-blueprint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Echo input parameters
+        run: |
+          echo "=========================================="
+          echo "User Input Parameters:"
+          echo "=========================================="
+          echo "Filename: ${{ github.event.inputs.filename }}"
+          echo "Region: ${{ github.event.inputs.region }}"
+          echo "=========================================="
