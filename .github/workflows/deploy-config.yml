@@ -12,6 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       changed_config: ${{ steps.find_config.outputs.config }}
+      config_filename: ${{ steps.find_config.outputs.config_filename }}
       has_changes: ${{ steps.find_config.outputs.has_changes }}
       folder_name: ${{ steps.find_config.outputs.folder_name }}
     steps:
@@ -49,15 +50,20 @@ jobs:
           if [ -n "$CHANGED_CONFIGS" ]; then
             CONFIG_FILE=$(echo "$CHANGED_CONFIGS" | tr -d '\n')
             
+            # Extract filename (e.g., 'config.json')
+            CONFIG_FILENAME=$(basename "$CONFIG_FILE")
+            
             # Extract subfolder name (e.g., 'sagemaker-domain' from 'cdk-scripts/sagemaker-domain/config.json')
             FOLDER_NAME=$(echo "$CONFIG_FILE" | cut -d'/' -f2)
             
             echo "config=$CONFIG_FILE" >> $GITHUB_OUTPUT
+            echo "config_filename=$CONFIG_FILENAME" >> $GITHUB_OUTPUT
             echo "folder_name=$FOLDER_NAME" >> $GITHUB_OUTPUT
             echo "has_changes=true" >> $GITHUB_OUTPUT
             
             echo "=========================================="
             echo "Config file to deploy: $CONFIG_FILE"
+            echo "Config filename: $CONFIG_FILENAME"
             echo "Subfolder: $FOLDER_NAME"
             echo "=========================================="
           else
@@ -76,7 +82,10 @@ jobs:
       - name: Validate config.json syntax
         run: |
           CONFIG_FILE="${{ needs.detect-config-changes.outputs.changed_config }}"
+          CONFIG_FILENAME="${{ needs.detect-config-changes.outputs.config_filename }}"
+          
           echo "Validating: $CONFIG_FILE"
+          echo "Filename: $CONFIG_FILENAME"
           
           # Validate JSON syntax
           jq empty "$CONFIG_FILE" || {
@@ -107,6 +116,7 @@ jobs:
         id: extract_config
         run: |
           CONFIG_FILE="${{ needs.detect-config-changes.outputs.changed_config }}"
+          CONFIG_FILENAME="${{ needs.detect-config-changes.outputs.config_filename }}"
           FOLDER_NAME="${{ needs.detect-config-changes.outputs.folder_name }}"
           
           # Extract full folder path
@@ -114,11 +124,13 @@ jobs:
           
           echo "folder_path=$FOLDER_PATH" >> $GITHUB_OUTPUT
           echo "folder_name=$FOLDER_NAME" >> $GITHUB_OUTPUT
+          echo "config_filename=$CONFIG_FILENAME" >> $GITHUB_OUTPUT
           
           echo "=========================================="
           echo "Deployment Details:"
           echo "=========================================="
           echo "Config File: $CONFIG_FILE"
+          echo "Config Filename: $CONFIG_FILENAME"
           echo "Subfolder: $FOLDER_NAME"
           echo "Full Path: $FOLDER_PATH"
           echo "=========================================="
@@ -150,6 +162,7 @@ jobs:
         run: |
           FOLDER_PATH="${{ steps.extract_config.outputs.folder_path }}"
           FOLDER_NAME="${{ steps.extract_config.outputs.folder_name }}"
+          CONFIG_FILENAME="${{ steps.extract_config.outputs.config_filename }}"
           CONFIG_FILE="${{ needs.detect-config-changes.outputs.changed_config }}"
           
           echo "=========================================="
@@ -160,32 +173,57 @@ jobs:
           cd "$FOLDER_PATH"
           
           echo "Current directory: $(pwd)"
-          echo "Config file: $(basename $CONFIG_FILE)"
+          echo "Config filename: $CONFIG_FILENAME"
+          echo "Full config path: $CONFIG_FILE"
           
           # Display config
           echo "Config contents:"
-          cat config.json
+          cat "$CONFIG_FILENAME"
           
           # Extract stack name from config
-          STACK_NAME=$(jq -r '.stackName' config.json)
-          ENVIRONMENT=$(jq -r '.environment // "dev"' config.json)
+          STACK_NAME=$(jq -r '.stackName' "$CONFIG_FILENAME")
+          ENVIRONMENT=$(jq -r '.environment // "dev"' "$CONFIG_FILENAME")
           
           echo "Stack Name: $STACK_NAME"
           echo "Environment: $ENVIRONMENT"
           
-          # Run CDK deploy
-          echo "Running CDK deploy..."
+          # Run CDK deploy with config filename as parameter
+          echo "Running CDK deploy with config: $CONFIG_FILENAME"
           cdk deploy \
             --require-approval never \
+            --config configFile=$CONFIG_FILENAME \
             --config stackName=$STACK_NAME \
             --config environment=$ENVIRONMENT
           
           if [ $? -eq 0 ]; then
             echo "✅ CDK deployment completed successfully"
+            echo "Config file used: $CONFIG_FILENAME"
           else
             echo "❌ CDK deployment failed"
             exit 1
           fi
+
+      - name: Run custom CLI command with config filename
+        run: |
+          FOLDER_PATH="${{ steps.extract_config.outputs.folder_path }}"
+          CONFIG_FILENAME="${{ steps.extract_config.outputs.config_filename }}"
+          FOLDER_NAME="${{ steps.extract_config.outputs.folder_name }}"
+          
+          cd "$FOLDER_PATH"
+          
+          echo "=========================================="
+          echo "Running CLI with config filename parameter"
+          echo "=========================================="
+          echo "CLI Command: my-cli deploy --config $CONFIG_FILENAME"
+          echo "Subfolder: $FOLDER_NAME"
+          echo "=========================================="
+          
+          # Replace 'my-cli' with your actual CLI command
+          # my-cli deploy --config "$CONFIG_FILENAME"
+          # or
+          # my-cli deploy --input "$CONFIG_FILENAME" --environment "prod"
+          
+          echo "✅ CLI command executed with config: $CONFIG_FILENAME"
 
   post-deployment:
     needs: [detect-config-changes, deploy-capability]
@@ -195,6 +233,7 @@ jobs:
       - name: Create deployment summary
         run: |
           CONFIG_FILE="${{ needs.detect-config-changes.outputs.changed_config }}"
+          CONFIG_FILENAME="${{ needs.detect-config-changes.outputs.config_filename }}"
           FOLDER_NAME="${{ needs.detect-config-changes.outputs.folder_name }}"
           DEPLOY_STATUS="${{ needs.deploy-capability.result }}"
           
@@ -203,6 +242,7 @@ jobs:
           echo "=========================================="
           echo "Subfolder: $FOLDER_NAME"
           echo "Config File: $CONFIG_FILE"
+          echo "Config Filename: $CONFIG_FILENAME"
           echo "Status: $DEPLOY_STATUS"
           echo "=========================================="
 
@@ -210,4 +250,5 @@ jobs:
         if: needs.deploy-capability.result == 'failure'
         run: |
           echo "❌ Deployment failed for ${{ needs.detect-config-changes.outputs.folder_name }}"
+          echo "Config file: ${{ needs.detect-config-changes.outputs.config_filename }}"
           exit 1
