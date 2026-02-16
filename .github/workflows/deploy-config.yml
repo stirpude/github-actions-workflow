@@ -152,56 +152,56 @@ jobs:
           
           echo "Dependencies installed successfully"
 
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v2
-        with:
-          role-to-assume: arn:aws:iam::${{ vars.AWS_ACCOUNT_ID }}:role/GitHubActionsRole
-          aws-region: ${{ vars.AWS_REGION }}
+      #- name: Configure AWS credentials
+      #  uses: aws-actions/configure-aws-credentials@v2
+      #  with:
+      #    role-to-assume: arn:aws:iam::${{ vars.AWS_ACCOUNT_ID }}:role/GitHubActionsRole
+      #    aws-region: ${{ vars.AWS_REGION }}
 
-      - name: Deploy CDK stack
-        run: |
-          FOLDER_PATH="${{ steps.extract_config.outputs.folder_path }}"
-          FOLDER_NAME="${{ steps.extract_config.outputs.folder_name }}"
-          CONFIG_FILENAME="${{ steps.extract_config.outputs.config_filename }}"
-          CONFIG_FILE="${{ needs.detect-config-changes.outputs.changed_config }}"
+      #- name: Deploy CDK stack
+      #  run: |
+      #    FOLDER_PATH="${{ steps.extract_config.outputs.folder_path }}"
+      #    FOLDER_NAME="${{ steps.extract_config.outputs.folder_name }}"
+      #    CONFIG_FILENAME="${{ steps.extract_config.outputs.config_filename }}"
+      #    CONFIG_FILE="${{ needs.detect-config-changes.outputs.changed_config }}"
           
-          echo "=========================================="
-          echo "Deploying CDK Stack: $FOLDER_NAME"
-          echo "=========================================="
+      #    echo "=========================================="
+      #    echo "Deploying CDK Stack: $FOLDER_NAME"
+      #    echo "=========================================="
           
-          # Navigate to subfolder
-          cd "$FOLDER_PATH"
+      #    # Navigate to subfolder
+      #    cd "$FOLDER_PATH"
           
-          echo "Current directory: $(pwd)"
-          echo "Config filename: $CONFIG_FILENAME"
-          echo "Full config path: $CONFIG_FILE"
+      #    echo "Current directory: $(pwd)"
+      #    echo "Config filename: $CONFIG_FILENAME"
+      #    echo "Full config path: $CONFIG_FILE"
           
-          # Display config
-          echo "Config contents:"
-          cat "$CONFIG_FILENAME"
+      #    # Display config
+      #    echo "Config contents:"
+      #    cat "$CONFIG_FILENAME"
           
-          # Extract stack name from config
-          STACK_NAME=$(jq -r '.stackName' "$CONFIG_FILENAME")
-          ENVIRONMENT=$(jq -r '.environment // "dev"' "$CONFIG_FILENAME")
+      #    # Extract stack name from config
+      #    STACK_NAME=$(jq -r '.stackName' "$CONFIG_FILENAME")
+      #    ENVIRONMENT=$(jq -r '.environment // "dev"' "$CONFIG_FILENAME")
           
-          echo "Stack Name: $STACK_NAME"
-          echo "Environment: $ENVIRONMENT"
+      #    echo "Stack Name: $STACK_NAME"
+      #    echo "Environment: $ENVIRONMENT"
           
-          # Run CDK deploy with config filename as parameter
-          echo "Running CDK deploy with config: $CONFIG_FILENAME"
-          cdk deploy \
-            --require-approval never \
-            --config configFile=$CONFIG_FILENAME \
-            --config stackName=$STACK_NAME \
-            --config environment=$ENVIRONMENT
+      #    # Run CDK deploy with config filename as parameter
+      #    echo "Running CDK deploy with config: $CONFIG_FILENAME"
+      #    cdk deploy \
+      #      --require-approval never \
+      #      --config configFile=$CONFIG_FILENAME \
+      #      --config stackName=$STACK_NAME \
+      #      --config environment=$ENVIRONMENT
           
-          if [ $? -eq 0 ]; then
-            echo "✅ CDK deployment completed successfully"
-            echo "Config file used: $CONFIG_FILENAME"
-          else
-            echo "❌ CDK deployment failed"
-            exit 1
-          fi
+      #    if [ $? -eq 0 ]; then
+      #      echo "✅ CDK deployment completed successfully"
+      #      echo "Config file used: $CONFIG_FILENAME"
+      #    else
+      #      echo "❌ CDK deployment failed"
+      #      exit 1
+      #    fi
 
       - name: Run custom CLI command with config filename
         run: |
