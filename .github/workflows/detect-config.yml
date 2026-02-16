@@ -1,0 +1,71 @@
+name: Validate PR - Single Config Change
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'cdk-scripts/**/config.json'
+
+jobs:
+  validate-single-config:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Validate only one config.json changed
+        run: |
+          echo "=========================================="
+          echo "Validating PR: Only one config should change"
+          echo "=========================================="
+          
+          # Get all changed config.json files
+          CHANGED_CONFIGS=$(git diff --name-only \
+            origin/main...HEAD | grep '^cdk-scripts/.*/config\.json$' || true)
+          
+          echo "Changed config files in PR:"
+          echo "$CHANGED_CONFIGS"
+          
+          # Count changed files
+          COUNT=$(echo "$CHANGED_CONFIGS" | grep -c 'config.json' || true)
+          echo "Number of config files changed: $COUNT"
+          
+          if [ "$COUNT" -eq 0 ]; then
+            echo "ℹ️  No config.json files changed"
+            exit 0
+          fi
+          
+          if [ "$COUNT" -gt 1 ]; then
+            echo "❌ ERROR: Multiple config.json files changed!"
+            echo "Only ONE config file should be changed per PR"
+            echo "Changed files:"
+            echo "$CHANGED_CONFIGS"
+            exit 1
+          fi
+          
+          echo "✅ Validation passed: Only one config.json changed"
+          echo "Config file: $CHANGED_CONFIGS"
+
+      - name: Validate JSON syntax
+        run: |
+          CHANGED_CONFIG=$(git diff --name-only \
+            origin/main...HEAD | grep '^cdk-scripts/.*/config\.json$' | head -1)
+          
+          if [ -n "$CHANGED_CONFIG" ]; then
+            echo "Validating JSON syntax: $CHANGED_CONFIG"
+            
+            jq empty "$CHANGED_CONFIG" || {
+              echo "❌ ERROR: Invalid JSON in $CHANGED_CONFIG"
+              exit 1
+            }
+            
+            echo "✅ JSON validation passed"
+            
+            echo "=========================================="
+            echo "Config contents:"
+            echo "=========================================="
+            cat "$CHANGED_CONFIG"
+          fi
