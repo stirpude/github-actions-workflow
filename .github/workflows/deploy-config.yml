@@ -5,7 +5,7 @@ on:
     branches:
       - main
     paths:
-      - 'cdk-scripts/**/config.json'
+      - 'cdk-scripts/**/*.json'
 
 jobs:
   detect-config-changes:
