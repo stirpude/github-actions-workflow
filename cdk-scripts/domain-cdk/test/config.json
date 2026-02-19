@@ -1,4 +1,5 @@
 {
     "domain":"container1",
-    "vpcId":"xyz"
+    "vpcId":"xyz",
+    "subnetIds":"xq"
 }
