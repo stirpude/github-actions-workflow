@@ -1,0 +1,276 @@
+name: Deploy CDK capability
+
+on:
+  push:
+    branches:
+      - main
+      - 'feature/**'
+    paths:
+      - 'cdk-scripts/**/*.json'
+      - '!cdk-scripts/**/env.json'  # Exclude env.json from triggering
+
+jobs:
+  detect-config-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      changed_config: ${{ steps.find_config.outputs.config }}
+      config_filename: ${{ steps.find_config.outputs.config_filename }}
+      env_file: ${{ steps.find_config.outputs.env_file }}
+      has_changes: ${{ steps.find_config.outputs.has_changes }}
+      folder_path: ${{ steps.find_config.outputs.folder_path }}
+      domain_name: ${{ steps.find_config.outputs.domain_name }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect changed JSON files in cdk-scripts
+        id: find_config
+        run: |
+          echo "=========================================="
+          echo "Detecting JSON changes in cdk-scripts:"
+          echo "=========================================="
+          
+          # Handle first commit or force push
+          if [ "${{ github.event.before }}" == "0000000000000000000000000000000000000000" ]; then
+            echo "First commit or force push detected"
+            CHANGED_CONFIGS=$(git diff --name-only --diff-filter=AM HEAD~1 HEAD 2>/dev/null | grep '^cdk-scripts/.*\.json$' | grep -v 'env\.json$' || true)
+          else
+            CHANGED_CONFIGS=$(git diff --name-only --diff-filter=AM \
+              ${{ github.event.before }} \
+              ${{ github.sha }} | grep '^cdk-scripts/.*\.json$' | grep -v 'env\.json$' || true)
+          fi
+          
+          echo "Changed config files:"
+          echo "$CHANGED_CONFIGS"
+          
+          # Count changed files
+          if [ -n "$CHANGED_CONFIGS" ]; then
+            COUNT=$(echo "$CHANGED_CONFIGS" | wc -l)
+          else
+            COUNT=0
+          fi
+          echo "Number of config files changed: $COUNT"
+          
+          if [ "$COUNT" -gt 1 ]; then
+            echo "ERROR: Multiple config files changed. Only one file should be changed at a time."
+            echo "Changed files:"
+            echo "$CHANGED_CONFIGS"
+            exit 1
+          fi
+          
+          if [ -n "$CHANGED_CONFIGS" ]; then
+            CONFIG_FILE=$(echo "$CHANGED_CONFIGS" | tr -d '\n')
+            
+            # Extract config filename (e.g., 'sagemaker.json')
+            CONFIG_FILENAME=$(basename "$CONFIG_FILE")
+            
+            # Extract folder path (e.g., 'cdk-scripts/domain' or 'cdk-scripts/compute/eks')
+            FOLDER_PATH=$(dirname "$CONFIG_FILE")
+            
+            # Extract domain name (first folder after cdk-scripts)
+            # e.g., 'domain' from 'cdk-scripts/domain/sagemaker.json'
+            # e.g., 'compute' from 'cdk-scripts/compute/eks/cluster.json'
+            DOMAIN_NAME=$(echo "$CONFIG_FILE" | cut -d'/' -f2)
+            
+            # Find env.json in same directory
+            ENV_FILE="${FOLDER_PATH}/env.json"
+            if [ -f "$ENV_FILE" ]; then
+              echo "Found env file: $ENV_FILE"
+            else
+              echo "WARNING: No env.json found in $FOLDER_PATH"
+              ENV_FILE=""
+            fi
+            
+            echo "config=$CONFIG_FILE" >> $GITHUB_OUTPUT
+            echo "config_filename=$CONFIG_FILENAME" >> $GITHUB_OUTPUT
+            echo "folder_path=$FOLDER_PATH" >> $GITHUB_OUTPUT
+            echo "domain_name=$DOMAIN_NAME" >> $GITHUB_OUTPUT
+            echo "env_file=$ENV_FILE" >> $GITHUB_OUTPUT
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+            
+            echo "=========================================="
+            echo "Config file: $CONFIG_FILE"
+            echo "Config filename: $CONFIG_FILENAME"
+            echo "Domain: $DOMAIN_NAME"
+            echo "Folder path: $FOLDER_PATH"
+            echo "Env file: $ENV_FILE"
+            echo "=========================================="
+          else
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+            echo "No config changes detected in cdk-scripts"
+          fi
+
+  validate-config:
+    needs: detect-config-changes
+    if: needs.detect-config-changes.outputs.has_changes == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Validate JSON syntax
+        run: |
+          CONFIG_FILE="${{ needs.detect-config-changes.outputs.changed_config }}"
+          ENV_FILE="${{ needs.detect-config-changes.outputs.env_file }}"
+          
+          echo "Validating config: $CONFIG_FILE"
+          
+          # Validate config JSON syntax
+          jq empty "$CONFIG_FILE" || {
+            echo "ERROR: Invalid JSON in $CONFIG_FILE"
+            exit 1
+          }
+          echo "✅ Config validation passed"
+          
+          # Validate env.json if exists
+          if [ -n "$ENV_FILE" ] && [ -f "$ENV_FILE" ]; then
+            echo "Validating env: $ENV_FILE"
+            jq empty "$ENV_FILE" || {
+              echo "ERROR: Invalid JSON in $ENV_FILE"
+              exit 1
+            }
+            echo "✅ Env validation passed"
+          fi
+          
+          # Display contents
+          echo "=========================================="
+          echo "Config contents:"
+          echo "=========================================="
+          cat "$CONFIG_FILE"
+          
+          if [ -n "$ENV_FILE" ] && [ -f "$ENV_FILE" ]; then
+            echo ""
+            echo "=========================================="
+            echo "Env contents:"
+            echo "=========================================="
+            cat "$ENV_FILE"
+          fi
+
+  deploy-capability:
+    needs: [detect-config-changes, validate-config]
+    if: needs.detect-config-changes.outputs.has_changes == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup deployment
+        id: setup
+        run: |
+          CONFIG_FILE="${{ needs.detect-config-changes.outputs.changed_config }}"
+          CONFIG_FILENAME="${{ needs.detect-config-changes.outputs.config_filename }}"
+          FOLDER_PATH="${{ needs.detect-config-changes.outputs.folder_path }}"
+          DOMAIN_NAME="${{ needs.detect-config-changes.outputs.domain_name }}"
+          ENV_FILE="${{ needs.detect-config-changes.outputs.env_file }}"
+          
+          # Extract env filename if exists
+          if [ -n "$ENV_FILE" ] && [ -f "$ENV_FILE" ]; then
+            ENV_FILENAME=$(basename "$ENV_FILE")
+          else
+            ENV_FILENAME=""
+          fi
+          
+          echo "config_file=$CONFIG_FILE" >> $GITHUB_OUTPUT
+          echo "config_filename=$CONFIG_FILENAME" >> $GITHUB_OUTPUT
+          echo "folder_path=$FOLDER_PATH" >> $GITHUB_OUTPUT
+          echo "domain_name=$DOMAIN_NAME" >> $GITHUB_OUTPUT
+          echo "env_file=$ENV_FILE" >> $GITHUB_OUTPUT
+          echo "env_filename=$ENV_FILENAME" >> $GITHUB_OUTPUT
+          
+          echo "=========================================="
+          echo "Deployment Setup:"
+          echo "=========================================="
+          echo "Config: $CONFIG_FILE"
+          echo "Config Filename: $CONFIG_FILENAME"
+          echo "Domain: $DOMAIN_NAME"
+          echo "Folder: $FOLDER_PATH"
+          echo "Env File: $ENV_FILE"
+          echo "Env Filename: $ENV_FILENAME"
+          echo "=========================================="
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install dependencies
+        run: |
+          FOLDER_PATH="${{ steps.setup.outputs.folder_path }}"
+          
+          if [ -f "$FOLDER_PATH/package.json" ]; then
+            echo "Installing dependencies in: $FOLDER_PATH"
+            cd "$FOLDER_PATH"
+            npm install
+          else
+            echo "No package.json found, skipping npm install"
+          fi
+
+      #- name: Configure AWS credentials
+      #  uses: aws-actions/configure-aws-credentials@v4
+      #  with:
+      #    role-to-assume: arn:aws:iam::${{ vars.AWS_ACCOUNT_ID }}:role/GitHubActionsRole
+      #    aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Run CLI command
+        run: |
+          CONFIG_FILE="${{ steps.setup.outputs.config_file }}"
+          CONFIG_FILENAME="${{ steps.setup.outputs.config_filename }}"
+          ENV_FILE="${{ steps.setup.outputs.env_file }}"
+          ENV_FILENAME="${{ steps.setup.outputs.env_filename }}"
+          FOLDER_PATH="${{ steps.setup.outputs.folder_path }}"
+          DOMAIN_NAME="${{ steps.setup.outputs.domain_name }}"
+          
+          cd "$FOLDER_PATH"
+          
+          echo "=========================================="
+          echo "Deploying: $DOMAIN_NAME / $CONFIG_FILENAME"
+          echo "=========================================="
+          
+          # Build CLI command
+          if [ -n "$ENV_FILENAME" ] && [ -f "$ENV_FILENAME" ]; then
+            echo "CLI Command: my-cli deploy --config $CONFIG_FILENAME --env $ENV_FILENAME"
+            
+            # Uncomment for actual CLI:
+            # my-cli deploy --config "$CONFIG_FILENAME" --env "$ENV_FILENAME"
+          else
+            echo "CLI Command: my-cli deploy --config $CONFIG_FILENAME"
+            
+            # Uncomment for actual CLI:
+            # my-cli deploy --config "$CONFIG_FILENAME"
+          fi
+          
+          echo "✅ Deployment completed for $CONFIG_FILENAME"
+
+  post-deployment:
+    needs: [detect-config-changes, deploy-capability]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create deployment summary
+        run: |
+          CONFIG_FILE="${{ needs.detect-config-changes.outputs.changed_config }}"
+          CONFIG_FILENAME="${{ needs.detect-config-changes.outputs.config_filename }}"
+          DOMAIN_NAME="${{ needs.detect-config-changes.outputs.domain_name }}"
+          ENV_FILE="${{ needs.detect-config-changes.outputs.env_file }}"
+          DEPLOY_STATUS="${{ needs.deploy-capability.result }}"
+          
+          echo "## 🚀 Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| **Domain** | $DOMAIN_NAME |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Config** | $CONFIG_FILENAME |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Config Path** | $CONFIG_FILE |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Env File** | ${ENV_FILE:-N/A} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Status** | $DEPLOY_STATUS |" >> $GITHUB_STEP_SUMMARY
+
+      - name: Notify on failure
+        if: needs.deploy-capability.result == 'failure'
+        run: |
+          echo "❌ Deployment failed for ${{ needs.detect-config-changes.outputs.config_filename }}"
+          exit 1
