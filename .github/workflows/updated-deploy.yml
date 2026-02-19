@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - 'feature**'
     paths:
       - 'cdk-scripts/**/*.json'
       - '!cdk-scripts/**/env.json'
