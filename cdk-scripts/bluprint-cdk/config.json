@@ -1,7 +1,6 @@
 {
   "test": "value222",
   "test2": "value333",
-  "test": "value222 ",
  "Resources": {
    "MyLogicalId": {
      "Type": "",

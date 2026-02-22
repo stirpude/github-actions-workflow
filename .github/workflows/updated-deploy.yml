@@ -292,7 +292,7 @@ jobs:
           echo "✅ Deployed: $CONFIG_NAME"
 
   post-deployment:
-    needs: [detect-config-changes, deploy-capability]
+    needs: [detect-config-changes, deploy-capability, deploy-capability-dev, deploy-capability-prod]
     if: always()
     runs-on: ubuntu-latest
     steps:
