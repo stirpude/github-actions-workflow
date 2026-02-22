@@ -32,7 +32,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Detect changed JSON files
+      - name: Detect changed JSON files in it
         id: find_config
         run: |
           echo "=========================================="
