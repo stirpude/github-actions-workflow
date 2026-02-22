@@ -1,3 +1,12 @@
 {
-  "test": "value222"
+  "test": "value222",
+  "test2": "value333",
+ "Resources": {
+   "MyLogicalId": {
+     "Type": "",
+     "Properties": {
+       "Key": "Value"
+     }
+   }
+ }
 }
