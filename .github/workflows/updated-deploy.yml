@@ -158,9 +158,76 @@ jobs:
             echo "✅ Env validation passed"
           fi
 
-  deploy-capability:
+  deploy-capability-dev:
     needs: [detect-config-changes, validate-config]
-    if: needs.detect-config-changes.outputs.has_changes == 'true'
+    if: needs.detect-config-changes.outputs.has_changes == 'true' && github.ref_name == 'dev'
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install dependencies
+        run: |
+          DOMAIN_PATH="${{ needs.detect-config-changes.outputs.domain_path }}"
+          
+          if [ -f "$DOMAIN_PATH/package.json" ]; then
+            cd "$DOMAIN_PATH"
+            npm install
+          fi
+
+      #- name: Configure AWS credentials
+      #  uses: aws-actions/configure-aws-credentials@v4
+      #  with:
+      #    role-to-assume: arn:aws:iam::${{ vars.AWS_ACCOUNT_ID }}:role/GitHubActionsRole
+      #    aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Run CLI command
+        run: |
+          CONFIG_RELATIVE_PATH="${{ needs.detect-config-changes.outputs.config_relative_path }}"
+          ENV_RELATIVE_PATH="${{ needs.detect-config-changes.outputs.env_relative_path }}"
+          DOMAIN_PATH="${{ needs.detect-config-changes.outputs.domain_path }}"
+          DOMAIN_NAME="${{ needs.detect-config-changes.outputs.domain_name }}"
+          CONFIG_NAME="${{ needs.detect-config-changes.outputs.config_name }}"
+          
+          # Change to domain directory
+          cd "$DOMAIN_PATH"
+          
+          echo "=========================================="
+          echo "Current directory: $(pwd)"
+          echo "Deploying: $CONFIG_NAME"
+          echo "Domain: $DOMAIN_NAME"
+          echo "=========================================="
+          
+          # Build CLI command with relative paths
+          if [ -n "$ENV_RELATIVE_PATH" ]; then
+            echo "CLI Command:"
+            echo "  my-cli deploy --config $CONFIG_RELATIVE_PATH --env $ENV_RELATIVE_PATH"
+            
+            # Uncomment for actual CLI:
+            # my-cli deploy --config "$CONFIG_RELATIVE_PATH" --env "$ENV_RELATIVE_PATH"
+          else
+            echo "CLI Command:"
+            echo "  my-cli deploy --config $CONFIG_RELATIVE_PATH"
+            
+            # Uncomment for actual CLI:
+            # my-cli deploy --config "$CONFIG_RELATIVE_PATH"
+          fi
+          
+          echo "=========================================="
+          echo "✅ Deployed: $CONFIG_NAME"
+
+
+  deploy-capability-prod:
+    needs: [detect-config-changes, validate-config]
+    if: needs.detect-config-changes.outputs.has_changes == 'true' && github.ref_name == 'main'
     runs-on: ubuntu-latest
     permissions:
       id-token: write
