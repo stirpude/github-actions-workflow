@@ -4,10 +4,12 @@ on:
   push:
     branches:
       - main
-      - 'feature**'
+      - 'feature**' 
+      - dev
     paths:
       - 'cdk-scripts/**/*.json'
       - '!cdk-scripts/**/env.json'
+      - '!package.json'
 
 jobs:
   detect-config-changes:
