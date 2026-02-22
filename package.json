@@ -10,6 +10,7 @@
     "deploy": "cdk deploy",
     "destroy": "cdk destroy"
   },
+  
   "dependencies": {
     "@aws-cdk/aws-apigateway": "^1.100.0",
     "@aws-cdk/aws-iam": "^1.100.0",
@@ -22,7 +23,7 @@
     "aws-cdk": "^2.1033.0",
     "typescript": "^4.0.0"
   },
-  
+
   "jest": {
     "preset": "@shelf/jest-dynamodb"
   }
