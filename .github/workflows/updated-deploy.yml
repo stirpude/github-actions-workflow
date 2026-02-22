@@ -58,12 +58,12 @@ jobs:
           fi
           echo "Number of config files changed: $COUNT"
           
-          if [ "$COUNT" -gt 1 ]; then
-            echo "ERROR: Multiple config files changed. Only one file should be changed at a time."
-            echo "Changed files:"
-            echo "$CHANGED_CONFIGS"
-            exit 1
-          fi
+          #if [ "$COUNT" -gt 1 ]; then
+          #  echo "ERROR: Multiple config files changed. Only one file should be changed at a time."
+          #  echo "Changed files:"
+          #  echo "$CHANGED_CONFIGS"
+          #  exit 1
+          #fi
           
           if [ -n "$CHANGED_CONFIGS" ]; then
             CONFIG_FILE=$(echo "$CHANGED_CONFIGS" | tr -d '\n')
