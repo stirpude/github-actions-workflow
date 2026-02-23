@@ -11,6 +11,7 @@ on:
       - '!cdk-scripts/**/env.json'
       - '!**/package.json'
       - '!**/package-lock.json'
+      - '!cdk-scripts/**/modules/**'
 
 jobs:
   detect-config-changes:
@@ -47,7 +48,11 @@ jobs:
           else
             CHANGED_CONFIGS=$(git diff --name-only --diff-filter=AM \
               ${{ github.event.before }} \
-              ${{ github.sha }} | grep '^cdk-scripts/.*\.json$' | grep -v '/env\.json$' || true)
+              ${{ github.sha }} | grep '^cdk-scripts/.*\.json$' | grep -v '/env\.json$' \
+              | grep -v 'package\.json$' \
+              | grep -v 'package-lock\.json$' \
+              | grep -v 'cdk-scripts/.*/modules/' \
+              || true)
           fi
           
           echo "Changed config files:"
