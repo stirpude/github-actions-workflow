@@ -32,7 +32,15 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          fetch-depth: 0 
+
+      - name: Download and Install DIW CLI
+        run: |
+          curl -L -f -o cli.tgz \
+            -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+          "https://github.com/stirpude/github-actions-workflow/releases/download/v1.2.3/cli-tool-1.2.2.tgz"
+    
+          npm install -g ./cli.tgz    
 
       - name: Detect changed JSON files in it
         id: find_config
