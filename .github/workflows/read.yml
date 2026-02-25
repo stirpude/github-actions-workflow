@@ -26,7 +26,7 @@ jobs:
 
       - name: Read config and deploy
         run: |
-          CONFIG_FILE="bootstrap/bootstrap-config.json"
+          CONFIG_FILE="cdk-scripts/bootstrap/boostrap-config.json"
           
           echo "=========================================="
           echo "Reading config from: $CONFIG_FILE"
