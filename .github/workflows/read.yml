@@ -6,7 +6,7 @@ on:
       - main
       - dev
     paths:
-      - 'cdk-scripts/bootstrap/bootstrap-config.json'
+      - 'cdk-scripts/bootstrap/boostrap-config.json'
   workflow_dispatch:
 
 jobs:
