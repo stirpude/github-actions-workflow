@@ -1,0 +1,53 @@
+name: Bootstrap Deploy
+
+on:
+  push:
+    branches:
+      - main
+      - dev
+    paths:
+      - 'bootstrap/bootstrap-config.json'
+  workflow_dispatch:
+
+jobs:
+  bootstrap:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate JSON
+        run: |
+          jq empty bootstrap/bootstrap-config.json || { echo " Invalid JSON"; exit 1; }
+          echo "JSON is valid"
+
+      - name: Read config and deploy
+        run: |
+          CONFIG_FILE="bootstrap/bootstrap-config.json"
+          
+          echo "=========================================="
+          echo "Reading config from: $CONFIG_FILE"
+          echo "=========================================="
+          
+          # Read parameters from JSON
+          ACCOUNT=$(jq -r '.account' "$CONFIG_FILE")
+          IAM_ROLE=$(jq -r '.iam_role' "$CONFIG_FILE")
+          
+          echo "Account: $ACCOUNT"
+          echo "IAM Role: $IAM_ROLE"
+          
+          echo "=========================================="
+          echo "Running CLI command:"
+          echo "=========================================="
+          
+          # Run CLI with parameters
+          echo "my-cli bootstrap --account $ACCOUNT --role $IAM_ROLE"
+          
+          # Uncomment for actual CLI:
+          # my-cli bootstrap --account "$ACCOUNT" --role "$IAM_ROLE"
+          
+          echo "=========================================="
+          echo "✅ Bootstrap complete"
