@@ -21,7 +21,7 @@ jobs:
 
       - name: Validate JSON
         run: |
-          jq empty bootstrap/bootstrap-config.json || { echo " Invalid JSON"; exit 1; }
+          jq empty cdk-scripts/bootstrap/boostrap-config.json || { echo " Invalid JSON"; exit 1; }
           echo "JSON is valid"
 
       - name: Read config and deploy
