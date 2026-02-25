@@ -1,4 +1,4 @@
 {
     "account": "123456789012",
-    "iam_role": "arn:aws:iam::123456789012:role/BootStrapRole"
+    "iam_role": "arn:aws:iam::123456789012:role/BootStrapRole "
 }
