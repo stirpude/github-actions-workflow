@@ -346,4 +346,52 @@ jobs:
         if: needs.deploy-capability.result == 'failure'
         run: |
           echo "❌ Deployment failed: ${{ needs.detect-config-changes.outputs.config_name }}"
-          exit 1
+          exit 1 
+
+
+
+
+- name: Detect changed JSON files
+  id: find_config
+  run: |
+    echo "=========================================="
+    echo "Detecting JSON changes in cdk-scripts:"
+    echo "=========================================="
+    
+    # Handle first commit or force push
+    if [ "${{ github.event.before }}" == "0000000000000000000000000000000000000000" ]; then
+      echo "First commit or force push detected"
+      CHANGED_CONFIGS=$(git diff --name-only --diff-filter=AM HEAD~1 HEAD 2>/dev/null \
+        | grep '^cdk-scripts/.*\.json$' \
+        | grep -v '/env\.json$' \
+        | grep -v 'package\.json$' \
+        | grep -v 'package-lock\.json$' \
+        | grep -v 'cdk-scripts/.*/modules/' \
+        || true)
+      
+      # If HEAD~1 doesn't exist (very first commit)
+      if [ -z "$CHANGED_CONFIGS" ]; then
+        echo "No previous commit, listing all config files"
+        CHANGED_CONFIGS=$(git ls-files \
+          | grep '^cdk-scripts/.*\.json$' \
+          | grep -v '/env\.json$' \
+          | grep -v 'package\.json$' \
+          | grep -v 'package-lock\.json$' \
+          | grep -v 'cdk-scripts/.*/modules/' \
+          || true)
+      fi
+    else
+      CHANGED_CONFIGS=$(git diff --name-only --diff-filter=AM \
+        ${{ github.event.before }} \
+        ${{ github.sha }} \
+        | grep '^cdk-scripts/.*\.json$' \
+        | grep -v '/env\.json$' \
+        | grep -v 'package\.json$' \
+        | grep -v 'package-lock\.json$' \
+        | grep -v 'cdk-scripts/.*/modules/' \
+        || true)
+    fi
+    
+    echo "Changed config files:"
+    echo "$CHANGED_CONFIGS"
+              
