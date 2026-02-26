@@ -42,24 +42,24 @@ jobs:
             # Auto-detect from push
             if [ "${{ github.event.before }}" == "0000000000000000000000000000000000000000" ]; then
               CHANGED_CONFIG=$(git diff --name-only --diff-filter=AM HEAD~1 HEAD 2>/dev/null \
-                | grep '^bootstrap/.*\.json$' \
+                | grep '^cdk-scripts/bootstrap/.*\.json$' \
                 | head -1 || true)
               
               if [ -z "$CHANGED_CONFIG" ]; then
                 CHANGED_CONFIG=$(git ls-files \
-                  | grep '^bootstrap/.*\.json$' \
+                  | grep '^cdk-scripts/bootstrap/.*\.json$' \
                   | head -1 || true)
               fi
             else
               CHANGED_CONFIG=$(git diff --name-only --diff-filter=AM \
                 ${{ github.event.before }} \
                 ${{ github.sha }} \
-                | grep '^bootstrap/.*\.json$' \
+                | grep '^cdk-scripts/bootstrap/.*\.json$' \
                 | head -1 || true)
             fi
             
             if [ -n "$CHANGED_CONFIG" ]; then
-              # Extract environment from path (bootstrap/dev/config.json -> dev)
+              # Extract environment from path (cdk-scripts/bootstrap/dev/config.json -> dev)
               ENV=$(echo "$CHANGED_CONFIG" | cut -d'/' -f2)
               
               echo "config_file=$CHANGED_CONFIG" >> $GITHUB_OUTPUT
