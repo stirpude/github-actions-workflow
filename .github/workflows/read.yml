@@ -6,8 +6,8 @@ on:
       - fake-main
       - dev
     paths:
-      - 'cdk-scripts/bootstrap/**/*.json'
-  
+      - 'bootstrap/**/*.json'
+
 jobs:
   detect-and-deploy:
     runs-on: ubuntu-latest
@@ -20,67 +20,96 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Detect config file
+      - name: Detect config file and extract ENV
         id: detect
         run: |
-          # If manually triggered
-          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
-            ENV="${{ github.event.inputs.environment }}"
-            CONFIG_FILE="bootstrap/${ENV}/config.json"
+          echo "=========================================="
+          echo "Detecting config file and environment"
+          echo "=========================================="
+          
+          if [ "${{ github.event.before }}" == "0000000000000000000000000000000000000000" ]; then
+            echo "First commit or force push detected"
+            CHANGED_CONFIG=$(git diff --name-only --diff-filter=AM HEAD~1 HEAD 2>/dev/null \
+              | grep '^bootstrap/.*\.json$' \
+              | head -1 || true)
             
-            if [ -f "$CONFIG_FILE" ]; then
-              echo "config_file=$CONFIG_FILE" >> $GITHUB_OUTPUT
-              echo "environment=$ENV" >> $GITHUB_OUTPUT
-              echo "has_changes=true" >> $GITHUB_OUTPUT
-              echo "✅ Manual trigger: Using $CONFIG_FILE"
-            else
-              echo "❌ Config file not found: $CONFIG_FILE"
-              echo "has_changes=false" >> $GITHUB_OUTPUT
-              exit 1
+            if [ -z "$CHANGED_CONFIG" ]; then
+              CHANGED_CONFIG=$(git ls-files \
+                | grep '^bootstrap/.*\.json$' \
+                | head -1 || true)
             fi
           else
-            # Auto-detect from push
-            if [ "${{ github.event.before }}" == "0000000000000000000000000000000000000000" ]; then
-              CHANGED_CONFIG=$(git diff --name-only --diff-filter=AM HEAD~1 HEAD 2>/dev/null \
-                | grep '^cdk-scripts/bootstrap/.*\.json$' \
-                | head -1 || true)
-              
-              if [ -z "$CHANGED_CONFIG" ]; then
-                CHANGED_CONFIG=$(git ls-files \
-                  | grep '^cdk-scripts/bootstrap/.*\.json$' \
-                  | head -1 || true)
-              fi
-            else
-              CHANGED_CONFIG=$(git diff --name-only --diff-filter=AM \
-                ${{ github.event.before }} \
-                ${{ github.sha }} \
-                | grep '^cdk-scripts/bootstrap/.*\.json$' \
-                | head -1 || true)
-            fi
+            CHANGED_CONFIG=$(git diff --name-only --diff-filter=AM \
+              ${{ github.event.before }} \
+              ${{ github.sha }} \
+              | grep '^bootstrap/.*\.json$' \
+              | head -1 || true)
+          fi
+          
+          echo "Changed config file: $CHANGED_CONFIG"
+          
+          if [ -n "$CHANGED_CONFIG" ]; then
+            # Extract ENV from folder path
+            # Example: bootstrap/dev/config.json -> dev
+            # Example: bootstrap/prod/config.json -> prod
+            ENV=$(echo "$CHANGED_CONFIG" | cut -d'/' -f2)
             
-            if [ -n "$CHANGED_CONFIG" ]; then
-              # Extract environment from path (cdk-scripts/bootstrap/dev/config.json -> dev)
-              ENV=$(echo "$CHANGED_CONFIG" | cut -d'/' -f2)
-              
-              echo "config_file=$CHANGED_CONFIG" >> $GITHUB_OUTPUT
-              echo "environment=$ENV" >> $GITHUB_OUTPUT
-              echo "has_changes=true" >> $GITHUB_OUTPUT
-              echo "✅ Detected: $CHANGED_CONFIG (Environment: $ENV)"
-            else
-              echo "has_changes=false" >> $GITHUB_OUTPUT
-              echo "ℹ️ No bootstrap config changes detected"
-            fi
+            echo "=========================================="
+            echo "ENV Extraction:"
+            echo "  Full path: $CHANGED_CONFIG"
+            echo "  Extracted ENV: $ENV"
+            echo "=========================================="
+            
+            echo "config_file=$CHANGED_CONFIG" >> $GITHUB_OUTPUT
+            echo "environment=$ENV" >> $GITHUB_OUTPUT
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+            echo "ℹ️ No bootstrap config changes detected"
           fi
 
-      - name: Validate JSON
+      - name: Validate environment and branch match
         if: steps.detect.outputs.has_changes == 'true'
+        id: validate
+        run: |
+          ENV="${{ steps.detect.outputs.environment }}"
+          BRANCH="${{ github.ref_name }}"
+          CONFIG_FILE="${{ steps.detect.outputs.config_file }}"
+          
+          echo "=========================================="
+          echo "Validation Check"
+          echo "=========================================="
+          echo "Config File: $CONFIG_FILE"
+          echo "Extracted ENV: $ENV"
+          echo "Current Branch: $BRANCH"
+          echo "=========================================="
+          
+          # RULE 1: bootstrap/dev/ → only dev branch
+          if [ "$ENV" == "dev" ] && [ "$BRANCH" != "dev" ]; then
+            echo "⚠️ SKIP: bootstrap/dev/ can only deploy from dev branch"
+            echo "should_deploy=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
+          # RULE 2: bootstrap/prod/ → only fake-main branch
+          if [ "$ENV" == "prod" ] && [ "$BRANCH" != "fake-main" ]; then
+            echo "⚠️ SKIP: bootstrap/prod/ can only deploy from fake-main branch"
+            echo "should_deploy=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
+          echo "✅ Validation passed"
+          echo "should_deploy=true" >> $GITHUB_OUTPUT
+
+      - name: Validate JSON syntax
+        if: steps.detect.outputs.has_changes == 'true' && steps.validate.outputs.should_deploy == 'true'
         run: |
           CONFIG_FILE="${{ steps.detect.outputs.config_file }}"
           jq empty "$CONFIG_FILE" || { echo "❌ Invalid JSON"; exit 1; }
           echo "✅ JSON is valid"
 
-      - name: Read config
-        if: steps.detect.outputs.has_changes == 'true'
+      - name: Read config parameters
+        if: steps.detect.outputs.has_changes == 'true' && steps.validate.outputs.should_deploy == 'true'
         id: config
         run: |
           CONFIG_FILE="${{ steps.detect.outputs.config_file }}"
@@ -105,43 +134,15 @@ jobs:
           echo "Environment: $ENVIRONMENT"
           echo "=========================================="
 
-      - name: Validate environment and branch
-        if: steps.detect.outputs.has_changes == 'true'
-        run: |
-          ENV="${{ steps.detect.outputs.environment }}"
-          BRANCH="${{ github.ref_name }}"
-          EVENT="${{ github.event_name }}"
-          
-          echo "Environment: $ENV"
-          echo "Branch: $BRANCH"
-          echo "Event: $EVENT"
-          
-          # Block manual trigger for prod
-          if [ "$EVENT" == "workflow_dispatch" ] && [ "$ENV" == "prod" ]; then
-            echo "❌ ERROR: Manual trigger not allowed for prod"
-            exit 1
-          fi
-          
-          # Prod can only deploy from fake-main branch via push
-          if [ "$ENV" == "prod" ] && [ "$BRANCH" != "fake-main" ]; then
-            echo "❌ ERROR: Prod can only be deployed from fake-main branch"
-            echo "Current branch: $BRANCH"
-            exit 1
-          fi
-          
-          # Dev can only deploy from dev branch (except manual trigger)
-          if [ "$ENV" == "dev" ] && [ "$BRANCH" != "dev" ] && [ "$EVENT" != "workflow_dispatch" ]; then
-            echo "❌ ERROR: Dev config can only be deployed from dev branch"
-            echo "Current branch: $BRANCH"
-            exit 1
-          fi
-          
-          echo "✅ Validation passed"
-
-
+      - name: Configure AWS credentials
+        if: steps.detect.outputs.has_changes == 'true' && steps.validate.outputs.should_deploy == 'true'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ steps.config.outputs.iam_role }}
+          aws-region: ${{ steps.config.outputs.region }}
 
       - name: Run Bootstrap CLI
-        if: steps.detect.outputs.has_changes == 'true'
+        if: steps.detect.outputs.has_changes == 'true' && steps.validate.outputs.should_deploy == 'true'
         run: |
           ACCOUNT="${{ steps.config.outputs.account }}"
           REGION="${{ steps.config.outputs.region }}"
@@ -151,13 +152,14 @@ jobs:
           
           echo "=========================================="
           echo "🚀 Running Bootstrap CLI"
+          echo "=========================================="
           echo "Environment: $ENVIRONMENT"
           echo "Account: $ACCOUNT"
           echo "Region: $REGION"
-          echo "Config: $CONFIG_FILE"
+          echo "Config File: $CONFIG_FILE"
           echo "=========================================="
           
-          # Run CLI
+          # CLI Command
           echo "cli deploy --config $CONFIG_FILE"
           
           # Uncomment for actual CLI:
@@ -169,13 +171,25 @@ jobs:
       - name: Deployment summary
         if: always() && steps.detect.outputs.has_changes == 'true'
         run: |
+          SHOULD_DEPLOY="${{ steps.validate.outputs.should_deploy }}"
+          ENV="${{ steps.detect.outputs.environment }}"
+          BRANCH="${{ github.ref_name }}"
+          
           echo "## 🚀 Bootstrap Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
           echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
-          echo "| **Environment** | ${{ steps.detect.outputs.environment }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| **Account** | ${{ steps.config.outputs.account }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| **Region** | ${{ steps.config.outputs.region }} |" >> $GITHUB_STEP_SUMMARY
           echo "| **Config File** | ${{ steps.detect.outputs.config_file }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| **Branch** | ${{ github.ref_name }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| **Trigger** | ${{ github.event_name }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **ENV** | $ENV |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Branch** | $BRANCH |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Deployed** | $SHOULD_DEPLOY |" >> $GITHUB_STEP_SUMMARY
+          
+          if [ "$SHOULD_DEPLOY" == "true" ]; then
+            echo "| **Account** | ${{ steps.config.outputs.account }} |" >> $GITHUB_STEP_SUMMARY
+            echo "| **Region** | ${{ steps.config.outputs.region }} |" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "✅ **Deployment successful**" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "⚠️ **Skipped - ENV ($ENV) doesn't match Branch ($BRANCH)**" >> $GITHUB_STEP_SUMMARY
+          fi
