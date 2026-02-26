@@ -6,7 +6,7 @@ on:
       - fake-main
       - dev
     paths:
-      - 'bootstrap/**/*.json'
+      - 'cdk-scripts/bootstrap/**/*.json'
   
 jobs:
   detect-and-deploy:
